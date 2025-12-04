@@ -6,6 +6,7 @@ IT359 Network Security Scanner Project
 """
 
 import tkinter as tk
+from anomaly_detector import AnomalyDetector
 from tkinter import ttk, messagebox, scrolledtext, filedialog
 from vulnerability_scanner import VulnerabilityScanner
 from anomaly_detector import AnomalyDetector
@@ -34,6 +35,12 @@ class ScannerGUI:
         env = self.wifi_scanner.detect_environment()
         initial_mode = "windows" if env == "wsl2" else "auto"
         self.wifi_scanner.set_scan_mode(initial_mode)
+
+    # Initialize anomaly detector with appropriate mode
+        self.anomaly_detector = AnomalyDetector()
+        env = self.anomaly_detector.detect_environment()
+        initial_mode = "windows" if env == "wsl2" else "auto"
+        self.anomaly_detector.set_detection_mode(initial_mode)
     
     # Create data directory if it doesn't exist
         if not os.path.exists('data'):
@@ -94,8 +101,6 @@ This tool provides various security scanning capabilities:
 📡 WiFi Scanner - Discover wireless networks and clients
 🔒 Vulnerability Scanner - Scan for known vulnerabilities
 🚨 Anomaly Detector - Monitor for suspicious traffic patterns
-🔒 Password Auditor - (Coming Soon)
-📡 Traffic Analyzer - (Coming Soon)
 
 Select a tool from the tabs above to get started."""
         
@@ -363,7 +368,7 @@ Select a tool from the tabs above to get started."""
         results_paned.sashpos(0, 400)
 
     def setup_anomaly_detector_tab(self):
-        """Setup the network anomaly detection tab"""
+        """Setup the network anomaly detection tab with mode toggle"""
         anomaly_tab = ttk.Frame(self.notebook)
         self.notebook.add(anomaly_tab, text="🚨 Anomaly Detector")
     
@@ -374,45 +379,75 @@ Select a tool from the tabs above to get started."""
         config_frame = ttk.LabelFrame(anomaly_tab, text="Anomaly Detection Configuration", padding=15)
         config_frame.pack(fill=tk.X, padx=10, pady=5)
     
-    # Interface selection
-        ttk.Label(config_frame, text="Network Interface:").grid(row=0, column=0, sticky=tk.W, pady=5)
-        self.anomaly_interface_var = tk.StringVar()
-        self.anomaly_interface_combo = ttk.Combobox(config_frame, textvariable=self.anomaly_interface_var, width=15)
-        self.anomaly_interface_combo.grid(row=0, column=1, sticky=tk.W, pady=5, padx=5)
+    # Detection Mode Toggle
+        ttk.Label(config_frame, text="Detection Mode:").grid(row=0, column=0, sticky=tk.W, pady=5)
+        self.anomaly_mode_var = tk.StringVar(value="auto")
+        mode_frame = ttk.Frame(config_frame)
+        mode_frame.grid(row=0, column=1, columnspan=3, sticky=tk.W, pady=5)
     
-    # Get available interfaces
-        self.refresh_anomaly_interfaces()
+        ttk.Radiobutton(mode_frame, text="Auto Detect", variable=self.anomaly_mode_var, 
+                   value="auto", command=self.on_anomaly_mode_change).pack(side=tk.LEFT, padx=5)
+        ttk.Radiobutton(mode_frame, text="Linux Native", variable=self.anomaly_mode_var, 
+                   value="linux", command=self.on_anomaly_mode_change).pack(side=tk.LEFT, padx=5)
+        ttk.Radiobutton(mode_frame, text="Windows (WSL2)", variable=self.anomaly_mode_var, 
+                   value="windows", command=self.on_anomaly_mode_change).pack(side=tk.LEFT, padx=5)
+    
+    # Environment detection display
+        self.anomaly_env_label = tk.Label(config_frame, text="", fg='blue', bg='#2b2b2b')
+        self.anomaly_env_label.grid(row=1, column=0, columnspan=4, sticky=tk.W, pady=5)
+    
+    # Interface selection (for Linux mode)
+        self.anomaly_interface_frame = ttk.LabelFrame(config_frame, text="Linux Interface", padding=5)
+        self.anomaly_interface_frame.grid(row=2, column=0, columnspan=4, sticky=tk.W, pady=5)
+    
+        ttk.Label(self.anomaly_interface_frame, text="Network Interface:").pack(side=tk.LEFT, padx=5)
+        self.anomaly_interface_var = tk.StringVar()
+        self.anomaly_interface_combo = ttk.Combobox(self.anomaly_interface_frame, 
+                                               textvariable=self.anomaly_interface_var, 
+                                               width=15, state='disabled')
+        self.anomaly_interface_combo.pack(side=tk.LEFT, padx=5)
+    
+        ttk.Button(self.anomaly_interface_frame, text="🔄 Refresh", 
+              command=self.refresh_anomaly_interfaces).pack(side=tk.LEFT, padx=5)
+    
+    # Windows mode info
+        self.windows_info_label = tk.Label(config_frame, 
+                                      text="Windows mode uses netstat and netsh via WSL2", 
+                                      fg='green', bg='#2b2b2b')
+        self.windows_info_label.grid(row=3, column=0, columnspan=4, sticky=tk.W, pady=5)
     
     # Monitoring duration
-        ttk.Label(config_frame, text="Duration (seconds):").grid(row=1, column=0, sticky=tk.W, pady=5)
+        ttk.Label(config_frame, text="Duration (seconds):").grid(row=4, column=0, sticky=tk.W, pady=5)
         self.anomaly_duration_var = tk.IntVar(value=60)
-        ttk.Spinbox(config_frame, from_=10, to=3600, textvariable=self.anomaly_duration_var, width=10).grid(row=1, column=1, sticky=tk.W, pady=5, padx=5)
+        ttk.Spinbox(config_frame, from_=10, to=3600, textvariable=self.anomaly_duration_var, 
+               width=10).grid(row=4, column=1, sticky=tk.W, pady=5, padx=5)
     
     # Control buttons
         button_frame = ttk.Frame(config_frame)
-        button_frame.grid(row=2, column=0, columnspan=3, pady=10)
+        button_frame.grid(row=5, column=0, columnspan=4, pady=10)
     
         ttk.Button(button_frame, 
-                text="🚀 Start Monitoring",
-                command=self.start_anomaly_monitoring).pack(side=tk.LEFT, padx=5)
+              text="🚀 Start Monitoring",
+              command=self.start_anomaly_monitoring).pack(side=tk.LEFT, padx=5)
     
         ttk.Button(button_frame,
-                text="📊 Generate Traffic Graph",
-                command=self.generate_traffic_graph).pack(side=tk.LEFT, padx=5)
+              text="📊 Generate Traffic Graph",
+              command=self.generate_traffic_graph).pack(side=tk.LEFT, padx=5)
     
         ttk.Button(button_frame,
-                text="💾 Save Results",
-                command=self.save_anomaly_results).pack(side=tk.LEFT, padx=5)
+              text="💾 Save Results",
+              command=self.save_anomaly_results).pack(side=tk.LEFT, padx=5)
     
         ttk.Button(button_frame,
-                text="⏹️ Stop Monitoring",
-                command=self.stop_anomaly_monitoring).pack(side=tk.LEFT, padx=5)
+              text="⏹️ Stop Monitoring",
+              command=self.stop_anomaly_monitoring).pack(side=tk.LEFT, padx=5)
     
     # Status frame
         self.anomaly_status_frame = ttk.LabelFrame(anomaly_tab, text="Monitoring Status", padding=15)
         self.anomaly_status_frame.pack(fill=tk.X, padx=10, pady=5)
     
-        self.anomaly_status_label = tk.Label(self.anomaly_status_frame, text="Not monitoring", fg='white', bg='#2b2b2b')
+        self.anomaly_status_label = tk.Label(self.anomaly_status_frame, text="Not monitoring", 
+                                        fg='white', bg='#2b2b2b')
         self.anomaly_status_label.pack()
     
     # Results area with paned window
@@ -423,18 +458,23 @@ Select a tool from the tabs above to get started."""
         anomalies_frame = ttk.LabelFrame(results_paned, text="Detected Anomalies", padding=10)
         results_paned.add(anomalies_frame, weight=1)
     
-        self.anomalies_text = scrolledtext.ScrolledText(anomalies_frame, height=10, bg='#1e1e1e', fg='white')
+        self.anomalies_text = scrolledtext.ScrolledText(anomalies_frame, height=10, 
+                                                   bg='#1e1e1e', fg='white')
         self.anomalies_text.pack(fill=tk.BOTH, expand=True)
     
     # Statistics frame
         stats_frame = ttk.LabelFrame(results_paned, text="Traffic Statistics", padding=10)
         results_paned.add(stats_frame, weight=1)
     
-        self.stats_text = scrolledtext.ScrolledText(stats_frame, height=10, bg='#1e1e1e', fg='white')
+        self.stats_text = scrolledtext.ScrolledText(stats_frame, height=10, 
+                                               bg='#1e1e1e', fg='white')
         self.stats_text.pack(fill=tk.BOTH, expand=True)
     
     # Set initial paned window position
         results_paned.sashpos(0, 200)
+    
+    # Initialize mode
+        self.on_anomaly_mode_change()
     
     def setup_results_tab(self):
         """Setup the results tab"""
@@ -897,14 +937,30 @@ Select a tool from the tabs above to get started."""
             messagebox.showerror("Error", f"Could not load results: {e}")
 
     def refresh_anomaly_interfaces(self):
-        """Refresh list of network interfaces for anomaly detection"""
+        """Refresh list of network interfaces for anomaly detection (Linux mode)"""
         try:
         # Get available network interfaces
             import netifaces
             interfaces = netifaces.interfaces()
-            self.anomaly_interface_combo['values'] = interfaces
-            if interfaces:
-                self.anomaly_interface_var.set(interfaces[0])
+        
+        # Filter out loopback and virtual interfaces if too many
+            filtered_interfaces = []
+            for iface in interfaces:
+                if not iface.startswith(('lo', 'docker', 'veth', 'br-', 'virbr')):
+                    filtered_interfaces.append(iface)
+        
+        # If still too many, show common ones
+            if len(filtered_interfaces) > 10:
+                common_interfaces = ['eth0', 'wlan0', 'wlp2s0', 'any']
+                filtered_interfaces = [iface for iface in filtered_interfaces 
+                                    if iface in common_interfaces or 'eth' in iface or 'wlan' in iface]
+        
+            self.anomaly_interface_combo['values'] = filtered_interfaces
+            if filtered_interfaces:
+                self.anomaly_interface_var.set(filtered_interfaces[0])
+            else:
+                self.anomaly_interface_var.set('any')
+            
         except ImportError:
         # Fallback if netifaces not installed
             self.anomaly_interface_combo['values'] = ['eth0', 'wlan0', 'any']
@@ -1027,30 +1083,51 @@ Select a tool from the tabs above to get started."""
 # Anomaly Detection Methods
     def start_anomaly_monitoring(self):
         """Start anomaly detection monitoring"""
-        interface = self.anomaly_interface_var.get()
-        if not interface:
-            messagebox.showerror("Error", "Please select a network interface")
-            return
+        mode = self.anomaly_mode_var.get()
+    
+    # Get interface for Linux mode
+        interface = None
+        if mode == "linux" or (mode == "auto" and self.anomaly_detector.detect_environment() == "linux"):
+            interface = self.anomaly_interface_var.get()
+            if not interface:
+                messagebox.showerror("Error", "Please select a network interface for Linux mode")
+                return
     
         duration = self.anomaly_duration_var.get()
     
-        self.anomaly_status_label.config(text=f"Monitoring {interface} for {duration} seconds...", fg='yellow')
+        mode_text = f"{mode.upper()} mode"
+        if interface:
+            mode_text += f" on {interface}"
+    
+        self.anomaly_status_label.config(text=f"Monitoring in {mode_text} for {duration} seconds...", fg='yellow')
         self.anomalies_text.delete(1.0, tk.END)
         self.stats_text.delete(1.0, tk.END)
     
-        self.anomalies_text.insert(tk.END, "🚨 Starting anomaly detection...\n")
-        self.stats_text.insert(tk.END, "📊 Starting traffic analysis...\n")
+        self.anomalies_text.insert(tk.END, f"🚨 Starting anomaly detection in {mode_text}...\n")
+        self.stats_text.insert(tk.END, f"📊 Starting traffic analysis in {mode_text}...\n")
     
-        thread = threading.Thread(target=self._run_anomaly_monitoring, args=(interface, duration))
+        thread = threading.Thread(target=self._run_anomaly_monitoring, args=(interface, duration, mode))
         thread.daemon = True
         thread.start()
 
-    def _run_anomaly_monitoring(self, interface, duration):
+    def _run_anomaly_monitoring(self, interface, duration, mode):
         """Run anomaly monitoring in background thread"""
         try:
-            self.anomaly_detector.start_monitoring(interface, duration)
+        # Set detection mode
+            self.anomaly_detector.set_detection_mode(mode)
+        
+        # Start monitoring
+            if mode == "linux" or (mode == "auto" and self.anomaly_detector.detect_environment() == "linux"):
+            # Linux mode
+                if not interface:
+                    interface = 'any'
+                self.anomaly_detector.start_monitoring(interface, duration)
+            else:
+            # Windows mode - interface parameter ignored
+                self.anomaly_detector.start_monitoring(None, duration)
         
         # Wait for monitoring to complete
+            import time
             time.sleep(duration + 2)  # Add buffer for analysis
         
         # Get results
@@ -1062,15 +1139,24 @@ Select a tool from the tabs above to get started."""
             self.anomaly_status_label.config(text="Monitoring completed", fg='green')
         
         except Exception as e:
-            self.anomalies_text.insert(tk.END, f"❌ Monitoring error: {e}\n")
+            import traceback
+            error_details = traceback.format_exc()
+            error_msg = f"❌ Monitoring error: {e}\nDetails: {error_details[:500]}"
+            self.anomalies_text.insert(tk.END, error_msg + "\n")
             self.anomaly_status_label.config(text="Monitoring failed", fg='red')
+            print(f"Full error traceback:\n{error_details}")
 
     def display_anomaly_results(self, results):
         """Display anomaly detection results"""
+    # Display mode info
+        mode = results.get('mode', 'unknown')
+        self.anomalies_text.insert(tk.END, f"\n{'='*60}\n")
+        self.anomalies_text.insert(tk.END, f"DETECTION MODE: {mode.upper()}\n")
+        self.anomalies_text.insert(tk.END, f"{'='*60}\n")
+    
     # Display anomalies
-        self.anomalies_text.insert(tk.END, "\n" + "="*60 + "\n")
-        self.anomalies_text.insert(tk.END, "DETECTED ANOMALIES:\n")
-        self.anomalies_text.insert(tk.END, "="*60 + "\n")
+        self.anomalies_text.insert(tk.END, "\nDETECTED ANOMALIES:\n")
+        self.anomalies_text.insert(tk.END, "-" * 40 + "\n")
     
         if results.get('anomalies'):
             for anomaly in results['anomalies']:
@@ -1091,15 +1177,19 @@ Select a tool from the tabs above to get started."""
             self.anomalies_text.insert(tk.END, "\n✅ No anomalies detected\n")
     
     # Display statistics
-        self.stats_text.insert(tk.END, "\n" + "="*60 + "\n")
-        self.stats_text.insert(tk.END, "TRAFFIC STATISTICS:\n")
-        self.stats_text.insert(tk.END, "="*60 + "\n")
+        self.stats_text.insert(tk.END, f"\n{'='*60}\n")
+        self.stats_text.insert(tk.END, f"TRAFFIC STATISTICS ({mode.upper()} MODE):\n")
+        self.stats_text.insert(tk.END, f"{'='*60}\n")
     
         stats = results.get('statistics', {})
         if stats:
-            self.stats_text.insert(tk.END, f"\nTotal Packets: {stats.get('total_packets', 0)}\n")
-            self.stats_text.insert(tk.END, f"Packet Rate: {stats.get('packet_rate', 0)} packets/sec\n")
-            self.stats_text.insert(tk.END, f"Avg Packet Size: {stats.get('avg_packet_size', 0)} bytes\n")
+            self.stats_text.insert(tk.END, f"\nTotal Packets/Connections: {stats.get('total_packets', 0)}\n")
+            self.stats_text.insert(tk.END, f"Packet/Connection Rate: {stats.get('packet_rate', 0)} per sec\n")
+        
+            if mode == "windows":
+                self.stats_text.insert(tk.END, f"Windows Connections Sampled: {stats.get('windows_connections', 0)}\n")
+            else:
+                self.stats_text.insert(tk.END, f"Avg Packet Size: {stats.get('avg_packet_size', 0)} bytes\n")
         
             self.stats_text.insert(tk.END, f"\nProtocol Distribution:\n")
             for proto, count in stats.get('protocol_distribution', {}).items():
@@ -1155,6 +1245,28 @@ Select a tool from the tabs above to get started."""
         self.anomaly_detector.stop_monitoring()
         self.anomaly_status_label.config(text="Monitoring stopped", fg='orange')
         self.anomalies_text.insert(tk.END, "\n⏹️ Monitoring stopped by user\n")
+
+    def on_anomaly_mode_change(self):
+        """Handle anomaly detection mode change"""
+        mode = self.anomaly_mode_var.get()
+        self.anomaly_detector.set_detection_mode(mode)
+    
+    # Update environment display
+        env = self.anomaly_detector.detect_environment()
+        env_text = f"Detected: {env.upper()} | Mode: {mode.upper()}"
+        self.anomaly_env_label.config(text=env_text)
+    
+    # Enable/disable interface selection based on mode
+        if mode == "linux":
+            self.anomaly_interface_combo.config(state='normal')
+            self.refresh_anomaly_interfaces()
+            self.windows_info_label.config(text="", fg='green')
+        else:
+            self.anomaly_interface_combo.config(state='disabled')
+            self.windows_info_label.config(
+                text="Windows mode uses netstat and netsh via WSL2 to monitor real Windows traffic", 
+                fg='green'
+            )
 
 def main():
     """Main application entry point"""
